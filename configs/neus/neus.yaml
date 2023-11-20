@@ -1,0 +1,88 @@
+task: nerf
+gpus: [0]
+exp_name: 'img_fit'
+scene: 'lego'
+
+train_dataset_module: lib.datasets.img_fit.synthetic
+test_dataset_module: lib.datasets.img_fit.synthetic
+network_module: lib.networks.img_fit.network
+loss_module: lib.train.losses.img_fit
+evaluator_module: lib.evaluators.img_fit
+visualizer_module: lib.visualizers.img_fit
+
+task_arg:
+    N_pixels: 8192
+    chunk_size: 16384
+
+network:
+    n_samples: 64
+    n_importance: 64
+    n_outside: 0
+    up_sample_steps: 4     # 1 for simple coarse-to-fine sampling
+    perturb: 1.0
+    nerf:
+        D: 8
+        d_in: 4
+        d_in_view: 3
+        W: 256
+        multires: 10
+        multires_view: 4
+        output_ch: 4
+        skips: [4]
+        use_viewdirs: True
+    sdf_network:
+        d_out: 257
+        d_in: 3
+        d_hidden: 256
+        n_layers: 8
+        skip_in: [4]
+        multires: 6
+        bias: 0.5
+        scale: 1.0
+        geometric_init: True
+        weight_norm: True
+    variance_network:
+        init_val: 0.3
+
+    rendering_network:
+        d_feature: 256
+        mode: idr
+        d_in: 9
+        d_out: 3
+        d_hidden: 256
+        n_layers: 4
+        weight_norm: True
+        multires_view: 4
+        squeeze_out: True
+
+
+train_dataset:
+    data_root: 'data/nerf_synthetic'
+    split: 'train'
+    view: 0
+    input_ratio: 1.
+
+test_dataset:
+    data_root: 'data/nerf_synthetic'
+    view: 0
+    split: 'test'
+    input_ratio: 0.5
+
+train:
+    batch_size: 1
+    lr: 5e-4
+    weight_decay: 0.
+    epoch: 20 # 100 * 500
+    scheduler:
+        type: 'exponential'
+        gamma: 0.1
+        decay_epochs: 20
+    num_workers: 4
+
+test:
+    batch_size: 1
+
+ep_iter: 500
+eval_ep: 10       # 50 iterations
+save_latest_ep: 20 # 10000 iterations
+log_interval: 100
