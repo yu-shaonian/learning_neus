@@ -9,6 +9,8 @@ import torch
 import torch.distributed as dist
 import os
 torch.autograd.set_detect_anomaly(True)
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 if cfg.fix_random:
     torch.manual_seed(0)
@@ -101,6 +103,8 @@ def main():
                                              init_method="env://")
         synchronize()
 
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    torch.cuda.set_device('cuda:0')
     network = make_network(cfg)
     if args.test:
         test(cfg, network)

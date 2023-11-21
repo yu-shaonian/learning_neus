@@ -175,7 +175,7 @@ def make_cfg(args):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--cfg_file", default="D:/deeplearn/learning_neus/configs/neus/neus.yaml", type=str)
+parser.add_argument("--cfg_file", default="./configs/neus/neus.yaml", type=str)
 parser.add_argument('--test', action='store_true', dest='test', default=False)
 parser.add_argument("--type", type=str, default="")
 parser.add_argument('--det', type=str, default='')

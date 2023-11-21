@@ -10,3 +10,5 @@ __pycache__/
 *.npy
 *.ipynb
 *.png
+data/
+public_data

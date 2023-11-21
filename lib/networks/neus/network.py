@@ -54,7 +54,7 @@ def sample_pdf(bins, weights, n_samples, det=False):
         u = torch.rand(list(cdf.shape[:-1]) + [n_samples])
 
     # Invert CDF
-    u = u.contiguous()
+    u = u.contiguous().to(cdf.device)
     inds = torch.searchsorted(cdf, u, right=True)
     below = torch.max(torch.zeros_like(inds - 1), inds - 1)
     above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(inds), inds)
@@ -85,6 +85,7 @@ class Network(nn.Module):
         self.n_outside = net_cfg.n_outside
         self.up_sample_steps = net_cfg.up_sample_steps
         self.perturb = net_cfg.perturb
+        self.use_white_bkgd = cfg.train.use_white_bkgd
 
     def render_core_outside(self, rays_o, rays_d, z_vals, sample_dist, nerf, background_rgb=None):
         """
@@ -154,7 +155,7 @@ class Network(nn.Module):
         # |     \/
         # |
         # ----------------------------------------------------------------------------------------------------------
-        prev_cos_val = torch.cat([torch.zeros([batch_size, 1]), cos_val[:, :-1]], dim=-1)
+        prev_cos_val = torch.cat([torch.zeros([batch_size, 1]).to(cos_val.device), cos_val[:, :-1]], dim=-1)
         cos_val = torch.stack([prev_cos_val, cos_val], dim=-1)
         cos_val, _ = torch.min(cos_val, dim=-1, keepdim=False)
         cos_val = cos_val.clip(-1e3, 0.0) * inside_sphere
@@ -166,7 +167,7 @@ class Network(nn.Module):
         next_cdf = torch.sigmoid(next_esti_sdf * inv_s)
         alpha = (prev_cdf - next_cdf + 1e-5) / (prev_cdf + 1e-5)
         weights = alpha * torch.cumprod(
-            torch.cat([torch.ones([batch_size, 1]), 1. - alpha + 1e-7], -1), -1)[:, :-1]
+            torch.cat([torch.ones([batch_size, 1]).to(alpha.device), 1. - alpha + 1e-7], -1), -1)[:, :-1]
 
         z_samples = sample_pdf(z_vals, weights, n_importance, det=True).detach()
         return z_samples
@@ -203,7 +204,7 @@ class Network(nn.Module):
 
         # Section length
         dists = z_vals[..., 1:] - z_vals[..., :-1]
-        dists = torch.cat([dists, torch.Tensor([sample_dist]).expand(dists[..., :1].shape)], -1)
+        dists = torch.cat([dists, torch.Tensor([sample_dist]).expand(dists[..., :1].shape).to(dists.device)], -1)
         mid_z_vals = z_vals + dists * 0.5
 
         # Section midpoints
@@ -234,8 +235,8 @@ class Network(nn.Module):
         estimated_next_sdf = sdf + iter_cos * dists.reshape(-1, 1) * 0.5
         estimated_prev_sdf = sdf - iter_cos * dists.reshape(-1, 1) * 0.5
 
-        prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
-        next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
+        prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s.to(sdf.device))
+        next_cdf = torch.sigmoid(estimated_next_sdf * inv_s.to(sdf.device))
 
         p = prev_cdf - next_cdf
         c = prev_cdf
@@ -254,7 +255,7 @@ class Network(nn.Module):
                             background_sampled_color[:, :n_samples] * (1.0 - inside_sphere)[:, :, None]
             sampled_color = torch.cat([sampled_color, background_sampled_color[:, n_samples:]], dim=1)
 
-        weights = alpha * torch.cumprod(torch.cat([torch.ones([batch_size, 1]), 1. - alpha + 1e-7], -1), -1)[:, :-1]
+        weights = alpha * torch.cumprod(torch.cat([torch.ones([batch_size, 1]).to(alpha.device), 1. - alpha + 1e-7], -1), -1)[:, :-1]
         weights_sum = weights.sum(dim=-1, keepdim=True)
 
         color = (sampled_color * weights[:, :, None]).sum(dim=1)
@@ -279,10 +280,20 @@ class Network(nn.Module):
             'inside_sphere': inside_sphere
         }
 
-    def render(self, rays_o, rays_d, near, far, perturb_overwrite=-1, background_rgb=None, cos_anneal_ratio=0.0):
+    def forward(self, batch):
+
+        rays_o = batch['rays_o'].squeeze(0)
+        rays_d = batch['rays_d'].squeeze(0)
+        near = batch['near'].squeeze(0)
+        far = batch['far'].squeeze(0)
+        cos_anneal_ratio = batch['cos_anneal_ratio']
+        background_rgb = None
+        perturb_overwrite = -1
+        if self.use_white_bkgd:
+            background_rgb = torch.ones([1, 3])
         batch_size = len(rays_o)
         sample_dist = 2.0 / self.n_samples   # Assuming the region of interest is a unit sphere
-        z_vals = torch.linspace(0.0, 1.0, self.n_samples)
+        z_vals = torch.linspace(0.0, 1.0, self.n_samples).to(far.device)
         z_vals = near + (far - near) * z_vals[None, :]
 
         z_vals_outside = None
@@ -295,7 +306,7 @@ class Network(nn.Module):
         if perturb_overwrite >= 0:
             perturb = perturb_overwrite
         if perturb > 0:
-            t_rand = (torch.rand([batch_size, 1]) - 0.5)
+            t_rand = (torch.rand([batch_size, 1]) - 0.5).to(z_vals.device)
             z_vals = z_vals + t_rand * 2.0 / self.n_samples
 
             if self.n_outside > 0:
@@ -379,3 +390,8 @@ class Network(nn.Module):
                                 resolution=resolution,
                                 threshold=threshold,
                                 query_func=lambda pts: -self.sdf_network.sdf(pts))
+
+
+if __name__ == '__main__':
+    # model = Network()
+    print()

@@ -1,17 +1,17 @@
 task: nerf
 gpus: [0]
-exp_name: 'img_fit'
+exp_name: 'neus'
 scene: 'lego'
 
-train_dataset_module: lib.datasets.img_fit.synthetic
-test_dataset_module: lib.datasets.img_fit.synthetic
-network_module: lib.networks.img_fit.network
-loss_module: lib.train.losses.img_fit
+train_dataset_module: lib.datasets.neus.neus_dataset
+test_dataset_module: lib.datasets.neus.neus_dataset
+network_module: lib.networks.neus.network
+loss_module: lib.train.losses.neus_loss
 evaluator_module: lib.evaluators.img_fit
 visualizer_module: lib.visualizers.img_fit
 
 task_arg:
-    N_pixels: 8192
+    N_pixels: 1024
     chunk_size: 16384
 
 network:
@@ -41,6 +41,7 @@ network:
         scale: 1.0
         geometric_init: True
         weight_norm: True
+        inside_outside: False
     variance_network:
         init_val: 0.3
 
@@ -57,12 +58,22 @@ network:
 
 
 train_dataset:
+    data_dir: '/home/guojun/research/learning_neus/public_data/scan40/'
+    render_cameras_name: 'cameras.npz'
+    object_cameras_name: 'cameras.npz'
+    camera_outside_sphere: True
+    scale_mat_scale: 1.1
     data_root: 'data/nerf_synthetic'
     split: 'train'
     view: 0
     input_ratio: 1.
 
 test_dataset:
+    data_dir: '/home/guojun/research/learning_neus/public_data/scan40/'
+    render_cameras_name: 'cameras.npz'
+    object_cameras_name: 'cameras.npz'
+    camera_outside_sphere: True
+    scale_mat_scale: 1.1
     data_root: 'data/nerf_synthetic'
     view: 0
     split: 'test'
@@ -70,6 +81,7 @@ test_dataset:
 
 train:
     batch_size: 1
+    anneal_end: 0
     lr: 5e-4
     weight_decay: 0.
     epoch: 20 # 100 * 500
@@ -77,7 +89,12 @@ train:
         type: 'exponential'
         gamma: 0.1
         decay_epochs: 20
-    num_workers: 4
+    num_workers: 0
+    validate_resolution_level: 4
+    warm_up_end: 5000
+    use_white_bkgd: False
+    igr_weight: 0.1
+    mask_weight: 0.0
 
 test:
     batch_size: 1

@@ -2,15 +2,19 @@ import time
 import datetime
 import torch
 import tqdm
+import os
 from torch.nn import DataParallel
 from torch.nn.parallel import DistributedDataParallel
 from lib.config import cfg
 from lib.utils.data_utils import to_cuda
+import numpy as np
+
 
 
 class Trainer(object):
     def __init__(self, network):
         device = torch.device('cuda:{}'.format(cfg.local_rank))
+
         network = network.to(device)
         if cfg.distributed:
             network = torch.nn.SyncBatchNorm.convert_sync_batchnorm(network)
@@ -24,6 +28,8 @@ class Trainer(object):
         self.local_rank = cfg.local_rank
         self.device = device
         self.global_step = 0
+        self.anneal_end = cfg.train.anneal_end
+
 
     def reduce_loss_stats(self, loss_stats):
         reduced_losses = {k: torch.mean(v) for k, v in loss_stats.items()}
@@ -41,7 +47,14 @@ class Trainer(object):
                 batch[k] = batch[k].to(self.device)
         return batch
 
+    def get_cos_anneal_ratio(self):
+        if self.anneal_end == 0.0:
+            return 1.0
+        else:
+            return np.min([1.0, self.global_step / self.anneal_end])
+
     def train(self, epoch, data_loader, optimizer, recorder):
+
         max_iter = len(data_loader)
         self.network.train()
         end = time.time()
@@ -51,14 +64,17 @@ class Trainer(object):
 
             batch = to_cuda(batch, self.device)
             batch['step'] = self.global_step
-            output, loss, loss_stats, image_stats = self.network(batch)
+            batch['cos_anneal_ratio'] = self.get_cos_anneal_ratio()
+            render_out, loss, scalar_stats, image_stats = self.network(batch)
 
             # training stage: loss; optimizer; scheduler
-            loss = loss.mean()
+
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_value_(self.network.parameters(), 40)
             optimizer.step()
+
+
 
             if cfg.local_rank > 0:
                 continue
@@ -66,9 +82,9 @@ class Trainer(object):
             # data recording stage: loss_stats, time, image_stats
             recorder.step += 1
 
-            loss_stats = self.reduce_loss_stats(loss_stats)
+            loss_stats = self.reduce_loss_stats(scalar_stats)
             recorder.update_loss_stats(loss_stats)
-
+            #
             batch_time = time.time() - end
             end = time.time()
             recorder.batch_time.update(batch_time)
@@ -87,7 +103,7 @@ class Trainer(object):
                 print(training_state)
 
                 # record loss_stats and image_dict
-                recorder.update_image_stats(image_stats)
+                # recorder.update_image_stats(image_stats)
                 recorder.record('train')
 
     def val(self, epoch, data_loader, evaluator=None, recorder=None):
