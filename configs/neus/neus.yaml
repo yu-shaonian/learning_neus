@@ -67,6 +67,7 @@ train_dataset:
     split: 'train'
     view: 0
     input_ratio: 1.
+    resolution_level: 1
 
 test_dataset:
     data_dir: '/home/guojun/research/learning_neus/public_data/scan40/'
@@ -78,6 +79,7 @@ test_dataset:
     view: 0
     split: 'test'
     input_ratio: 0.5
+    resolution_level: 1
 
 train:
     batch_size: 1

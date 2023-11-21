@@ -36,8 +36,9 @@ def make_dataset(cfg, is_train=True):
         args = cfg.test_dataset
         module = cfg.test_dataset_module
         path = cfg.test_dataset_path
+
     dataset = imp.load_source(module, path).Dataset
-    dataset = dataset(**args)
+    dataset = dataset(is_train, **args)
     return dataset
 
 

@@ -40,7 +40,7 @@ def load_K_Rt_from_P(filename, P=None):
 
 
 class Dataset:
-    def __init__(self, **kwargs):
+    def __init__(self, is_train, **kwargs):
         super(Dataset, self).__init__()
         print('Load data: Begin')
         self.device = torch.device('cuda')
@@ -50,6 +50,8 @@ class Dataset:
         self.camera_outside_sphere = kwargs['camera_outside_sphere']
         self.scale_mat_scale = kwargs['scale_mat_scale']
         self.batch_size = cfg.task_arg.N_pixels
+        self.is_train = is_train
+        self.resolution_level = kwargs['resolution_level']
 
         camera_dict = np.load(os.path.join(self.data_dir, self.render_cameras_name))
         self.camera_dict = camera_dict
@@ -107,15 +109,28 @@ class Dataset:
         pixels_x, pixels_y = torch.meshgrid(tx, ty)
         p = torch.stack([pixels_x, pixels_y, torch.ones_like(pixels_y)], dim=-1) # W, H, 3
         p = torch.matmul(self.intrinsics_all_inv[img_idx, None, None, :3, :3], p[:, :, :, None]).squeeze()  # W, H, 3
+        color = self.images[img_idx][(pixels_y, pixels_x)]    # batch_size, 3
+        mask = self.masks[img_idx][(pixels_y, pixels_x)]      # batch_size, 3
         rays_v = p / torch.linalg.norm(p, ord=2, dim=-1, keepdim=True)  # W, H, 3
         rays_v = torch.matmul(self.pose_all[img_idx, None, None, :3, :3], rays_v[:, :, :, None]).squeeze()  # W, H, 3
         rays_o = self.pose_all[img_idx, None, None, :3, 3].expand(rays_v.shape)  # W, H, 3
-        return rays_o.transpose(0, 1), rays_v.transpose(0, 1)
+        near, far = self.near_far_from_sphere(rays_o, rays_v)
+        batch = {}
+        batch['rays_o'] = rays_o
+        batch['rays_d'] = rays_v
+        batch['color'] = color
+        batch['near'] = near
+        batch['far'] = far
+        batch['mask'] = mask[:, :1]
+        batch['meta']= {'H': self.H // l, 'W': self.W // l}
+        return batch
 
     def __getitem__(self, img_idx):
         """
         Generate random rays at world space from one camera.
         """
+        if not self.is_train:
+            return self.gen_rays_at(img_idx, self.resolution_level)
         pixels_x = torch.randint(low=0, high=self.W, size=[self.batch_size])
         pixels_y = torch.randint(low=0, high=self.H, size=[self.batch_size])
         color = self.images[img_idx][(pixels_y, pixels_x)]    # batch_size, 3
@@ -135,6 +150,7 @@ class Dataset:
         batch['near'] = near
         batch['far'] = far
         batch['mask'] = mask[:, :1]
+        batch['meta'] = {'batch_size':self.batch_size }
         return batch  # batch_size, 10
 
     def gen_rays_between(self, idx_0, idx_1, ratio, resolution_level=1):
