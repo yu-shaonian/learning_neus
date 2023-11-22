@@ -107,8 +107,10 @@ class Dataset:
         tx = torch.linspace(0, self.W - 1, self.W // l)
         ty = torch.linspace(0, self.H - 1, self.H // l)
         pixels_x, pixels_y = torch.meshgrid(tx, ty)
+
         p = torch.stack([pixels_x, pixels_y, torch.ones_like(pixels_y)], dim=-1) # W, H, 3
         p = torch.matmul(self.intrinsics_all_inv[img_idx, None, None, :3, :3], p[:, :, :, None]).squeeze()  # W, H, 3
+        pixels_x, pixels_y = pixels_x.to(dtype=torch.long), pixels_y.to(dtype=torch.long)
         color = self.images[img_idx][(pixels_y, pixels_x)]    # batch_size, 3
         mask = self.masks[img_idx][(pixels_y, pixels_x)]      # batch_size, 3
         rays_v = p / torch.linalg.norm(p, ord=2, dim=-1, keepdim=True)  # W, H, 3
@@ -121,7 +123,7 @@ class Dataset:
         batch['color'] = color
         batch['near'] = near
         batch['far'] = far
-        batch['mask'] = mask[:, :1]
+        batch['mask'] = mask[:, :, :1]
         batch['meta']= {'H': self.H // l, 'W': self.W // l}
         return batch
 

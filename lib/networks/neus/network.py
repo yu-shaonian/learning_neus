@@ -289,6 +289,8 @@ class Network(nn.Module):
         cos_anneal_ratio = batch['cos_anneal_ratio']
         background_rgb = None
         perturb_overwrite = -1
+        # import ipdb
+        # ipdb.set_trace()
         if self.use_white_bkgd:
             background_rgb = torch.ones([1, 3])
         batch_size = len(rays_o)

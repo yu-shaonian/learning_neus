@@ -10,7 +10,6 @@ from lib.utils.data_utils import to_cuda
 import numpy as np
 
 
-
 class Trainer(object):
     def __init__(self, network):
         device = torch.device('cuda:{}'.format(cfg.local_rank))
@@ -29,7 +28,7 @@ class Trainer(object):
         self.device = device
         self.global_step = 0
         self.anneal_end = cfg.train.anneal_end
-
+        self.batch_size = cfg.task_arg.N_pixels
 
     def reduce_loss_stats(self, loss_stats):
         reduced_losses = {k: torch.mean(v) for k, v in loss_stats.items()}
@@ -74,8 +73,6 @@ class Trainer(object):
             torch.nn.utils.clip_grad_value_(self.network.parameters(), 40)
             optimizer.step()
 
-
-
             if cfg.local_rank > 0:
                 continue
 
@@ -107,25 +104,48 @@ class Trainer(object):
                 recorder.record('train')
 
     def val(self, epoch, data_loader, evaluator=None, recorder=None):
-        self.network.eval()
+        # self.network.eval()
         torch.cuda.empty_cache()
         val_loss_stats = {}
         image_stats = {}
         data_size = len(data_loader)
         for batch in tqdm.tqdm(data_loader):
             batch = to_cuda(batch, self.device)
-            batch['step'] = recorder.step
-            with torch.no_grad():
-                output, loss, loss_stats, _ = self.network(batch)
-                if evaluator is not None:
-                    image_stats_ = evaluator.evaluate(output, batch)
-                    if image_stats_ is not None:
-                        image_stats.update(image_stats_)
+            batch['step'] = self.global_step
+            batch['cos_anneal_ratio'] = self.get_cos_anneal_ratio()
+            # import ipdb
+            # ipdb.set_trace()
+            # batch['step'] = recorder.step
+            # with torch.no_grad():
+            batch_test = {}
+            for k in batch:
+                batch_test[k] = batch[k]
 
-            loss_stats = self.reduce_loss_stats(loss_stats)
-            for k, v in loss_stats.items():
-                val_loss_stats.setdefault(k, 0)
-                val_loss_stats[k] += v
+            rays_o = batch['rays_o'].reshape(-1, 3).split(self.batch_size)
+            rays_d = batch['rays_d'].reshape(-1, 3).split(self.batch_size)
+            color = batch['color'].reshape(-1, 3).split(self.batch_size)
+            near = batch['near'].reshape(-1, 1).split(self.batch_size)
+            far = batch['far'].reshape(-1, 1).split(self.batch_size)
+            mask = batch['mask'].reshape(-1, 1).split(self.batch_size)
+            outrgb_fine = []
+            for rays_o_batch, rays_d_batch, color_batch, near_batch, far_batch, mask_batch in zip(rays_o,
+                                                                                                  rays_d, color, near, far, mask):
+                batch_test['rays_o'] = rays_o_batch
+                batch_test['rays_d'] = rays_d_batch
+                batch_test['color'] = color_batch
+                batch_test['near'] = near_batch
+                batch_test['far'] = far_batch
+                batch_test['mask'] = mask_batch
+                output, loss, loss_stats, _ = self.network(batch_test)
+                # if evaluator is not None:
+                #     image_stats_ = evaluator.evaluate(output, batch)
+                #     if image_stats_ is not None:
+                #         image_stats.update(image_stats_)
+
+                loss_stats = self.reduce_loss_stats(loss_stats)
+        for k, v in loss_stats.items():
+            val_loss_stats.setdefault(k, 0)
+            val_loss_stats[k] += v
 
         loss_state = []
         for k in val_loss_stats.keys():

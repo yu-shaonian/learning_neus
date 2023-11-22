@@ -24,7 +24,7 @@ class Evaluator:
         # assert image number = 1
         H, W = batch['meta']['H'].item(), batch['meta']['W'].item()
         pred_rgb = output['color_fine'][0].reshape(H, W, 3).detach().cpu().numpy()
-        gt_rgb = batch['color'][0].reshape(H, W, 3).detach().cpu().numpy()  
+        gt_rgb = batch['color'][0].reshape(H, W, 3).detach().cpu().numpy()
         psnr_item = psnr(gt_rgb, pred_rgb, data_range=1.)
         self.psnrs.append(psnr_item)
         save_path = os.path.join(cfg.result_dir, 'vis/res.jpg')

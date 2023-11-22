@@ -7,11 +7,11 @@ train_dataset_module: lib.datasets.neus.neus_dataset
 test_dataset_module: lib.datasets.neus.neus_dataset
 network_module: lib.networks.neus.network
 loss_module: lib.train.losses.neus_loss
-evaluator_module: lib.evaluators.img_fit
+evaluator_module: lib.evaluators.neus
 visualizer_module: lib.visualizers.img_fit
 
 task_arg:
-    N_pixels: 1024
+    N_pixels: 100
     chunk_size: 16384
 
 network:
