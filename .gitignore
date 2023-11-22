@@ -9,6 +9,5 @@ __pycache__/
 *.pth
 *.npy
 *.ipynb
-*.png
 data/
 public_data
