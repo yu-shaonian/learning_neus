@@ -33,4 +33,6 @@ Neus复现总结
 
 5、这段代码还没怎么理解
 
+https://github.com/Totoro97/NeuS/blob/629b9cf0d9e2451d10c498726b51a7940069ed13/models/renderer.py#L230-L251
+
 ![image-20231122214744406](README.assets/image-20231122214744406.png)
