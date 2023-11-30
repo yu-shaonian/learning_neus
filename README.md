@@ -1,38 +1,104 @@
-# Learning Neus
+# NeuS
+We present a novel neural surface reconstruction method, called NeuS (pronunciation: /nuːz/, same as "news"), for reconstructing objects and scenes with high fidelity from 2D image inputs.
 
-#### 训练
+![](./static/intro_1_compressed.gif)
+![](./static/intro_2_compressed.gif)
+
+## [Project page](https://lingjie0206.github.io/papers/NeuS/) |  [Paper](https://arxiv.org/abs/2106.10689) | [Data](https://www.dropbox.com/sh/w0y8bbdmxzik3uk/AAAaZffBiJevxQzRskoOYcyja?dl=0)
+This is the official repo for the implementation of **NeuS: Learning Neural Implicit Surfaces by Volume Rendering for Multi-view Reconstruction**.
+
+## Usage
+
+#### Data Convention
+The data is organized as follows:
 
 ```
-python train_net.py  --cfg_file configs/neus/neus.yaml
+<case_name>
+|-- cameras_xxx.npz    # camera parameters
+|-- image
+    |-- 000.png        # target image for each view
+    |-- 001.png
+    ...
+|-- mask
+    |-- 000.png        # target mask each view (For unmasked setting, set all pixels as 255)
+    |-- 001.png
+    ...
 ```
 
-Neus复现总结
+Here the `cameras_xxx.npz` follows the data format in [IDR](https://github.com/lioryariv/idr/blob/main/DATA_CONVENTION.md), where `world_mat_xx` denotes the world to image projection matrix, and `scale_mat_xx` denotes the normalization matrix.
+
+### Setup
+
+Clone this repository
+
+```shell
+git clone https://github.com/Totoro97/NeuS.git
+cd NeuS
+pip install -r requirements.txt
+```
+
+<details>
+  <summary> Dependencies (click to expand) </summary>
+
+  - torch==1.8.0
+  - opencv_python==4.5.2.52
+  - trimesh==3.9.8 
+  - numpy==1.19.2
+  - pyhocon==0.3.57
+  - icecream==2.1.0
+  - tqdm==4.50.2
+  - scipy==1.7.0
+  - PyMCubes==0.1.2
+
+</details>
+
+### Running
+
+- **Training without mask**
+
+```shell
+python exp_runner.py --mode train --conf ./confs/womask.conf --case <case_name>
+```
+
+- **Training with mask**
+
+```shell
+python exp_runner.py --mode train --conf ./confs/wmask.conf --case <case_name>
+```
+
+- **Extract surface from trained model** 
+
+```shell
+python exp_runner.py --mode validate_mesh --conf <config_file> --case <case_name> --is_continue # use latest checkpoint
+```
+
+The corresponding mesh can be found in `exp/<case_name>/<exp_name>/meshes/<iter_steps>.ply`.
+
+- **View interpolation**
+
+```shell
+python exp_runner.py --mode interpolate_<img_idx_0>_<img_idx_1> --conf <config_file> --case <case_name> --is_continue # use latest checkpoint
+```
+
+The corresponding image set of view interpolation can be found in `exp/<case_name>/<exp_name>/render/`.
+
+### Train NeuS with your custom data
+
+More information can be found in [preprocess_custom_data](https://github.com/Totoro97/NeuS/tree/main/preprocess_custom_data).
+
+## Citation
+
+Cite as below if you find this repository is helpful to your project:
 
 ```
-1、第一天，看懂Neus论文思路
-2、第二天，看懂实验室的learning_nerf框架
-3、梳理Neus的网络部分的关键代码
-4、整合代码到实验室的learning_nerf框架上
+@article{wang2021neus,
+  title={NeuS: Learning Neural Implicit Surfaces by Volume Rendering for Multi-view Reconstruction},
+  author={Wang, Peng and Liu, Lingjie and Liu, Yuan and Theobalt, Christian and Komura, Taku and Wang, Wenping},
+  journal={arXiv preprint arXiv:2106.10689},
+  year={2021}
+}
 ```
 
-1、数据集可能不怎么对，目前我数据IDR项目中下载，Neus提供的谷歌云盘数据不让下载，数据大致相同，但是相机参数这块，Neus项目中用的是cameras_sphere，IDR提供的是camera.npz和cameras_linear_init.npz,IDR介绍的是区别在于是否对相机参数进行归一化，但是Neus对数据这块并没有详细介绍，论文中只是说数据和IDR是一样的。
+## Acknowledgement
 
-![image-20231119161928700](README.assets/image-20231119161928700.png)
-
-2、Neus代码中计算位置编码值的gradients主要用途是什么
-
-![image-20231119223534456](README.assets/image-20231119223534456.png)
-
-3、Sphere-based sampling基于球体的采样，还不怎么理解，怎么通过光线的原点以及光线的方向向量
-
-![image-20231122210830635](README.assets/image-20231122210830635.png)
-
-4、计算sdf值的时候，为什么还要得到sdf网络还要输出feature特征
-
-![image-20231122213021824](README.assets/image-20231122213021824.png)
-
-5、这段代码还没怎么理解
-
-https://github.com/Totoro97/NeuS/blob/629b9cf0d9e2451d10c498726b51a7940069ed13/models/renderer.py#L230-L251
-
-![image-20231122214744406](README.assets/image-20231122214744406.png)
+Some code snippets are borrowed from [IDR](https://github.com/lioryariv/idr) and [NeRF-pytorch](https://github.com/yenchenlin/nerf-pytorch). Thanks for these great projects.
